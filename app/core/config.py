@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     db_port: int = 5432
     db_name: str = "DB_Sistema_Deteccion_ACS"
     db_user: str = "postgres"
-    db_password: str
+    db_password: str | None = None
 
     cors_origins: str = "*"
 
