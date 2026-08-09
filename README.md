@@ -1,6 +1,6 @@
 # Backend Tesis Apnea
 
-Backend con FastAPI para consumir el modelo PyTorch `modelo_apnea_central_0-3.pth`, procesar ventanas de senal fisiologica y guardar consultas/resultados en PostgreSQL local.
+Backend con FastAPI para consumir el modelo PyTorch `modelo_resnet_apnea_central_0-7.pth`, procesar ventanas de senal fisiologica y guardar consultas/resultados en PostgreSQL/Supabase.
 
 ## Instalacion
 
@@ -12,6 +12,8 @@ Copy-Item .env.example .env
 ```
 
 Edita `.env` con los datos sensibles de tu proyecto: conexión a la base de datos, JWT y credenciales de acceso.
+
+La conexión se configura con `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` y `DB_SSLMODE`; no se almacena una URL con credenciales en el repositorio. Las contraseñas pueden incluir caracteres especiales: el backend las codifica de forma segura al crear la conexión.
 
 ## Ejecutar
 
@@ -60,11 +62,30 @@ curl -X POST "http://127.0.0.1:8000/api/v1/predict" \
 
 La API lee el archivo, extrae las señales esperadas y ajusta la entrada a `3840 x 3`; si faltan muestras rellena con ceros, si sobran recorta, y si hay más/menos canales adapta a 3 canales.
 
-## Nota sobre tablas existentes
+## Base de datos en Supabase
 
-El backend usa las tablas `usuarios`, `resultados` e `historial_consultas`. Como no se incluyo el esquema exacto, las inserciones usan columnas habituales:
+Ejecuta el contenido de [db/schema.sql](db/schema.sql) en **Supabase > SQL Editor > New query**. Crea las tablas `usuarios`, `resultados` e `historial_consultas`, sus claves foráneas e índices. Puedes crear un usuario inicial con el `INSERT` comentado al final del archivo.
 
-- `resultados`: `usuario_id`, `paciente_id`, `prediccion`, `probabilidad`, `clase`, `modelo`, `metadata`, `created_at`
-- `historial_consultas`: `usuario_id`, `endpoint`, `request`, `response`, `created_at`
+## Despliegue en Render
 
-Si tus tablas tienen otros nombres de columnas, ajusta `app/db/repositories.py`.
+Crea un **Web Service** desde este repositorio y selecciona el entorno **Docker**; Render usará el `Dockerfile` incluido. Configura estas variables de entorno en el panel de Render (no subas un `.env` real):
+
+```text
+APP_ENV=production
+MODEL_PATH=./modelo_resnet_apnea_central_0-7.pth
+MODEL_THRESHOLD=0.5
+DB_HOST=db.TU_PROJECT_REF.supabase.co
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=<clave de Supabase, marcada como Secret>
+DB_SSLMODE=require
+CORS_ORIGINS=https://tu-frontend.onrender.com
+JWT_SECRET_KEY=<valor largo, aleatorio y marcado como Secret>
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRES_MINUTES=60
+AUTH_USERNAME=admin
+AUTH_PASSWORD=<clave robusta, marcada como Secret>
+```
+
+Usa `/` como Health Check Path en Render. El modelo `.pth` forma parte de la imagen Docker; no lo elimines del repositorio.

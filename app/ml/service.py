@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from app.core.config import get_settings
-from app.ml.model import CentralApneaCNN
+from app.ml.model import ResNetApneaCentral
 from app.ml.preprocessing import prepare_signal
 
 
@@ -26,7 +26,7 @@ class ModelService:
             model = checkpoint
         else:
             state_dict = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
-            model = CentralApneaCNN()
+            model = ResNetApneaCentral()
             model.load_state_dict(state_dict)
 
         model.to(self.device)

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,18 +13,13 @@ class Settings(BaseSettings):
     model_path: Path
     model_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
 
-    # Base de datos - Supabase PostgreSQL
-    database_url: str | None = Field(
-        default=None,
-        description="URL completa de conexión PostgreSQL",
-    )
-
-    # Opción 2: Componentes individuales
+    # La conexión se compone desde variables separadas.
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "DB_Sistema_Deteccion_ACS"
     db_user: str = "postgres"
-    db_password: str | None = None
+    db_password: str
+    db_sslmode: str = "require"
 
     cors_origins: str = "*"
 
@@ -44,12 +40,11 @@ class Settings(BaseSettings):
 
     def get_database_url(self) -> str:
         """Retorna la URL de conexión a la base de datos."""
-        if self.database_url:
-            return self.database_url
-
         return (
-            f"postgresql+psycopg://{self.db_user}:{self.db_password}"
+            "postgresql+psycopg://"
+            f"{quote_plus(self.db_user)}:{quote_plus(self.db_password)}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
+            f"?sslmode={quote_plus(self.db_sslmode)}"
         )
 
     @property
