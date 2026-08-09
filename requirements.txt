@@ -2,7 +2,6 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 psycopg[binary]
-psycopg2-binary
 pydantic-settings
 numpy
 torch
