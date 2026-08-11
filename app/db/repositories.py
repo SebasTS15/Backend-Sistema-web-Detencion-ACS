@@ -12,7 +12,7 @@ def check_database(db: Session) -> bool:
 
 def get_usuario(db: Session, usuario_id: int) -> dict[str, Any] | None:
     row = db.execute(
-        text("SELECT * FROM usuarios WHERE id = :usuario_id"),
+        text("SELECT * FROM public.usuarios WHERE id = :usuario_id"),
         {"usuario_id": usuario_id},
     ).mappings().first()
     return dict(row) if row else None
@@ -32,7 +32,7 @@ def insert_resultado(
     row = db.execute(
         text(
             """
-            INSERT INTO resultados
+            INSERT INTO public.resultados
                 (usuario_id, paciente_id, prediccion, probabilidad, clase, modelo, metadata, created_at)
             VALUES
                 (:usuario_id, :paciente_id, :prediccion, :probabilidad, :clase, :modelo, CAST(:metadata AS jsonb), NOW())
@@ -64,7 +64,7 @@ def insert_historial_consulta(
     row = db.execute(
         text(
             """
-            INSERT INTO historial_consultas
+            INSERT INTO public.historial_consultas
                 (usuario_id, endpoint, request, response, created_at)
             VALUES
                 (:usuario_id, :endpoint, CAST(:request AS jsonb), CAST(:response AS jsonb), NOW())
@@ -87,7 +87,7 @@ def list_resultados_by_usuario(db: Session, usuario_id: int, limit: int = 50) ->
         text(
             """
             SELECT *
-            FROM resultados
+            FROM public.resultados
             WHERE usuario_id = :usuario_id
             ORDER BY created_at DESC
             LIMIT :limit
@@ -103,7 +103,7 @@ def list_historial_by_usuario(db: Session, usuario_id: int, limit: int = 50) -> 
         text(
             """
             SELECT *
-            FROM historial_consultas
+            FROM public.historial_consultas
             WHERE usuario_id = :usuario_id
             ORDER BY created_at DESC
             LIMIT :limit
