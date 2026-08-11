@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import tempfile
@@ -11,6 +12,7 @@ from pyedflib import EdfReader
 
 from app.ml.preprocessing import EXPECTED_CHANNELS
 
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".edf", ".dat", ".apn"}
 
@@ -19,7 +21,10 @@ def parse_signal_file(file: UploadFile) -> tuple[list[list[float]], dict[str, An
     filename = Path(file.filename or "")
     extension = filename.suffix.lower()
 
+    logger.info(f"Iniciando parseo de archivo de señal: '{file.filename}' (extensión: '{extension}')")
+
     if extension not in SUPPORTED_EXTENSIONS:
+        logger.warning(f"Formato no soportado '{extension}' para archivo '{file.filename}'")
         raise ValueError("Archivo no soportado. Use .edf, .dat o .apn.")
 
     file.file.seek(0)
@@ -34,12 +39,17 @@ def parse_signal_file(file: UploadFile) -> tuple[list[list[float]], dict[str, An
         "sample_count": len(signals),
         "channel_count": len(signals[0]) if signals else 0,
     }
+    logger.info(
+        f"Parseo exitoso de '{file.filename}': "
+        f"{metadata['sample_count']} muestras, {metadata['channel_count']} canales."
+    )
     return signals, metadata
 
 
 def _read_edf(file: UploadFile) -> list[list[float]]:
     file.file.seek(0)
     content = file.file.read()
+    logger.debug(f"Guardando archivo EDF temporal para '{file.filename}' ({len(content)} bytes)")
 
     with tempfile.NamedTemporaryFile(suffix=".edf", delete=False) as temp_file:
         temp_file.write(content)
@@ -48,12 +58,14 @@ def _read_edf(file: UploadFile) -> list[list[float]]:
     try:
         with EdfReader(temp_path) as edf:
             n_channels = edf.signals_in_file
+            logger.debug(f"Lectura EDF: detectados {n_channels} canales de señal")
             signals = [edf.readSignal(idx).astype(np.float32) for idx in range(n_channels)]
             if not signals:
                 raise ValueError("El archivo EDF no contiene señales válidas.")
             stacked = np.stack(signals, axis=1)
             return stacked.tolist()
     except Exception as exc:
+        logger.error(f"Error procesando estructura EDF de '{file.filename}': {exc}")
         raise ValueError(f"Error leyendo el archivo EDF: {exc}") from exc
     finally:
         try:
@@ -88,6 +100,7 @@ def _read_text_signal(file: UploadFile) -> list[list[float]]:
             rows.append(values)
 
     if not rows:
+        logger.warning(f"No se encontraron datos numéricos en el archivo '{file.filename}'")
         raise ValueError("No se encontraron datos numéricos en el archivo.")
 
     data = np.asarray(rows, dtype=np.float32)
@@ -98,6 +111,9 @@ def _read_text_signal(file: UploadFile) -> list[list[float]]:
             data = data.reshape(-1, 1)
 
     if data.ndim != 2:
+        logger.warning(f"Forma inválida de matriz de datos ({data.ndim}D) en '{file.filename}'")
         raise ValueError("El contenido del archivo no tiene una forma válida de señales.")
 
+    logger.debug(f"Matriz de señal de texto construida con forma: {data.shape}")
     return data.tolist()
+

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
@@ -7,6 +8,8 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -23,14 +26,17 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
         "sub": subject,
         "exp": expire,
     }
+    logger.debug(f"Creando token JWT para subject='{subject}', expira en '{expire}'")
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def decode_access_token(token: str) -> TokenPayload:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        logger.debug(f"Token JWT verificado correctamente para subject='{payload.get('sub')}'")
         return TokenPayload(**payload)
     except JWTError as exc:
+        logger.warning(f"Fallo en verificación de token JWT: {exc}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido o expirado.",
@@ -41,3 +47,4 @@ def decode_access_token(token: str) -> TokenPayload:
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, str]:
     token_data = decode_access_token(token)
     return {"username": token_data.sub}
+
