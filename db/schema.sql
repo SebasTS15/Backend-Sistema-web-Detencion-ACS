@@ -3,6 +3,8 @@
 
 CREATE TABLE IF NOT EXISTS public.usuarios (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
     nombre VARCHAR(150) NOT NULL,
     email VARCHAR(255) UNIQUE,
     activo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -38,5 +40,4 @@ CREATE INDEX IF NOT EXISTS idx_resultados_paciente_id
 CREATE INDEX IF NOT EXISTS idx_historial_usuario_created_at
     ON public.historial_consultas (usuario_id, created_at DESC);
 
--- Usuario inicial opcional. /predict solo valida el ID si se envia usuario_id.
--- INSERT INTO public.usuarios (nombre, email) VALUES ('Administrador', 'admin@tu-dominio.com');
+-- Usuario inicial. Ejecuta el script db/seed.py después de crear las tablas para generar el hash del password.

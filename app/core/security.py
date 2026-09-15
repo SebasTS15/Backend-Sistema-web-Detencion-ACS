@@ -46,5 +46,5 @@ def decode_access_token(token: str) -> TokenPayload:
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, str]:
     token_data = decode_access_token(token)
-    return {"username": token_data.sub}
+    return {"user_id": token_data.sub}
 

@@ -68,7 +68,7 @@ def predict(
     current_user: dict[str, str] = Depends(get_current_user),
 ) -> PredictResponse:
     logger.info(
-        f"Petición de predicción recibida por '{current_user.get('username')}': "
+        f"Petición de predicción recibida por user_id={current_user.get('user_id')}: "
         f"archivo='{archivo.filename}', usuario_id={usuario_id}, paciente_id='{paciente_id}', "
         f"normalize={normalize}, guardar_resultado={guardar_resultado}, guardar_historial={guardar_historial}"
     )
@@ -155,7 +155,7 @@ def usuario(
     db: Session = Depends(get_db),
     current_user: dict[str, str] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    logger.info(f"Usuario '{current_user.get('username')}' solicita info de usuario ID={usuario_id}")
+    logger.info(f"Usuario user_id={current_user.get('user_id')} solicita info de usuario ID={usuario_id}")
     data = get_usuario(db, usuario_id)
     if data is None:
         logger.warning(f"Usuario ID={usuario_id} no encontrado.")
@@ -173,7 +173,7 @@ def resultados_usuario(
     db: Session = Depends(get_db),
     current_user: dict[str, str] = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
-    logger.info(f"Usuario '{current_user.get('username')}' consulta resultados de usuario ID={usuario_id} (limit={limit})")
+    logger.info(f"Usuario user_id={current_user.get('user_id')} consulta resultados de usuario ID={usuario_id} (limit={limit})")
     return list_resultados_by_usuario(db, usuario_id, limit=limit)
 
 
@@ -187,6 +187,6 @@ def historial_usuario(
     db: Session = Depends(get_db),
     current_user: dict[str, str] = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
-    logger.info(f"Usuario '{current_user.get('username')}' consulta historial de usuario ID={usuario_id} (limit={limit})")
+    logger.info(f"Usuario user_id={current_user.get('user_id')} consulta historial de usuario ID={usuario_id} (limit={limit})")
     return list_historial_by_usuario(db, usuario_id, limit=limit)
 

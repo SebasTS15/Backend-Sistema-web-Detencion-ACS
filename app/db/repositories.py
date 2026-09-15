@@ -28,6 +28,19 @@ def get_usuario(db: Session, usuario_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def get_usuario_by_username(db: Session, username: str) -> dict[str, Any] | None:
+    logger.debug(f"Buscando usuario por username='{username}' en la base de datos...")
+    row = db.execute(
+        text("SELECT * FROM public.usuarios WHERE username = :username AND activo = TRUE"),
+        {"username": username},
+    ).mappings().first()
+    if row:
+        logger.debug(f"Usuario '{username}' encontrado.")
+    else:
+        logger.debug(f"Usuario '{username}' no existe o está inactivo en la BD.")
+    return dict(row) if row else None
+
+
 def insert_resultado(
     db: Session,
     *,

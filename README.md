@@ -33,8 +33,8 @@ Para obtener un token usa `POST /api/v1/auth/token` con JSON:
 
 ```json
 {
-  "username": "admin",
-  "password": "admin"
+  "username": "Administrador",
+  "password": "Admin12"
 }
 ```
 
@@ -84,8 +84,6 @@ CORS_ORIGINS=https://tu-frontend.onrender.com
 JWT_SECRET_KEY=<valor largo, aleatorio y marcado como Secret>
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRES_MINUTES=60
-AUTH_USERNAME=admin
-AUTH_PASSWORD=<clave robusta, marcada como Secret>
 ```
 
 Usa `/` como Health Check Path en Render. El modelo `.pth` forma parte de la imagen Docker; no lo elimines del repositorio.
