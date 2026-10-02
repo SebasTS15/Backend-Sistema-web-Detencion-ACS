@@ -1,5 +1,8 @@
+import logging
 import torch
 from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 class ResidualBlock(nn.Module):
@@ -32,6 +35,7 @@ class ResNetApneaCentral(nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
+        logger.debug("Instanciando arquitectura neuronal ResNetApneaCentral...")
         self.stem = nn.Sequential(
             nn.Conv1d(3, 32, kernel_size=7, padding=3),
             nn.BatchNorm1d(32),
@@ -57,3 +61,4 @@ class ResNetApneaCentral(nn.Module):
         x = self.layer3(x)
         x = self.global_pool(x)
         return self.classifier(x)
+

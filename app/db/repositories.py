@@ -1,20 +1,43 @@
 import json
+import logging
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 
 def check_database(db: Session) -> bool:
+    logger.debug("Ejecutando verificación de salud de la base de datos (SELECT 1)...")
     db.execute(text("SELECT 1"))
+    logger.debug("Verificación de base de datos exitosa.")
     return True
 
 
 def get_usuario(db: Session, usuario_id: int) -> dict[str, Any] | None:
+    logger.debug(f"Buscando usuario ID={usuario_id} en la base de datos...")
     row = db.execute(
-        text("SELECT * FROM usuarios WHERE id = :usuario_id"),
+        text("SELECT * FROM public.usuarios WHERE id = :usuario_id"),
         {"usuario_id": usuario_id},
     ).mappings().first()
+    if row:
+        logger.debug(f"Usuario ID={usuario_id} encontrado.")
+    else:
+        logger.debug(f"Usuario ID={usuario_id} no existe en la BD.")
+    return dict(row) if row else None
+
+
+def get_usuario_by_username(db: Session, username: str) -> dict[str, Any] | None:
+    logger.debug(f"Buscando usuario por username='{username}' en la base de datos...")
+    row = db.execute(
+        text("SELECT * FROM public.usuarios WHERE username = :username AND activo = TRUE"),
+        {"username": username},
+    ).mappings().first()
+    if row:
+        logger.debug(f"Usuario '{username}' encontrado.")
+    else:
+        logger.debug(f"Usuario '{username}' no existe o está inactivo en la BD.")
     return dict(row) if row else None
 
 
@@ -29,10 +52,14 @@ def insert_resultado(
     modelo: str,
     metadata: dict[str, Any],
 ) -> int | None:
+    logger.info(
+        f"Insertando nuevo resultado en BD: usuario_id={usuario_id}, paciente_id='{paciente_id}', "
+        f"prediccion={prediccion}, probabilidad={probabilidad:.4f}, clase='{clase}'"
+    )
     row = db.execute(
         text(
             """
-            INSERT INTO resultados
+            INSERT INTO public.resultados
                 (usuario_id, paciente_id, prediccion, probabilidad, clase, modelo, metadata, created_at)
             VALUES
                 (:usuario_id, :paciente_id, :prediccion, :probabilidad, :clase, :modelo, CAST(:metadata AS jsonb), NOW())
@@ -50,7 +77,9 @@ def insert_resultado(
         },
     ).first()
     db.commit()
-    return int(row[0]) if row else None
+    resultado_id = int(row[0]) if row else None
+    logger.info(f"Resultado insertado exitosamente con ID={resultado_id}")
+    return resultado_id
 
 
 def insert_historial_consulta(
@@ -61,10 +90,11 @@ def insert_historial_consulta(
     request: dict[str, Any],
     response: dict[str, Any],
 ) -> int | None:
+    logger.info(f"Insertando historial de consulta en BD: endpoint='{endpoint}', usuario_id={usuario_id}")
     row = db.execute(
         text(
             """
-            INSERT INTO historial_consultas
+            INSERT INTO public.historial_consultas
                 (usuario_id, endpoint, request, response, created_at)
             VALUES
                 (:usuario_id, :endpoint, CAST(:request AS jsonb), CAST(:response AS jsonb), NOW())
@@ -79,15 +109,18 @@ def insert_historial_consulta(
         },
     ).first()
     db.commit()
-    return int(row[0]) if row else None
+    historial_id = int(row[0]) if row else None
+    logger.info(f"Historial de consulta insertado exitosamente con ID={historial_id}")
+    return historial_id
 
 
 def list_resultados_by_usuario(db: Session, usuario_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    logger.info(f"Consultando resultados en BD para usuario_id={usuario_id} (limit={limit})")
     rows = db.execute(
         text(
             """
             SELECT *
-            FROM resultados
+            FROM public.resultados
             WHERE usuario_id = :usuario_id
             ORDER BY created_at DESC
             LIMIT :limit
@@ -95,15 +128,17 @@ def list_resultados_by_usuario(db: Session, usuario_id: int, limit: int = 50) ->
         ),
         {"usuario_id": usuario_id, "limit": limit},
     ).mappings().all()
+    logger.info(f"Obtenidos {len(rows)} resultados para usuario_id={usuario_id}")
     return [dict(row) for row in rows]
 
 
 def list_historial_by_usuario(db: Session, usuario_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    logger.info(f"Consultando historial en BD para usuario_id={usuario_id} (limit={limit})")
     rows = db.execute(
         text(
             """
             SELECT *
-            FROM historial_consultas
+            FROM public.historial_consultas
             WHERE usuario_id = :usuario_id
             ORDER BY created_at DESC
             LIMIT :limit
@@ -111,4 +146,6 @@ def list_historial_by_usuario(db: Session, usuario_id: int, limit: int = 50) -> 
         ),
         {"usuario_id": usuario_id, "limit": limit},
     ).mappings().all()
+    logger.info(f"Obtenidos {len(rows)} registros de historial para usuario_id={usuario_id}")
     return [dict(row) for row in rows]
+

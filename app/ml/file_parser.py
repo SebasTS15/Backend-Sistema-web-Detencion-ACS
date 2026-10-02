@@ -1,10 +1,10 @@
+
 import os
 import re
 import tempfile
 from io import StringIO
 from pathlib import Path
 from typing import Any
-
 import numpy as np
 from fastapi import UploadFile
 from pyedflib import EdfReader
@@ -39,34 +39,24 @@ def parse_signal_file(file: UploadFile) -> tuple[np.ndarray, dict[str, Any]]:
 
 def _sanitize_edf_header(content: bytes) -> bytes:
     """
-    Sanitiza los encabezados principal y de canales EDF (bytes 0..header_bytes) corrigiendo:
-    - Bytes no-ASCII (<32 o >127) en Patient ID, Recording ID, etiquetas, transductores y prefiltros.
+    Sanitiza el encabezado EDF (256 bytes) corrigiendo:
+    - Caracteres no-ASCII en campos de Patient ID (bytes 8..88) y Recording ID (bytes 88..168).
     - Separadores no conformes (':', '/', '-', espacio) en fecha y hora de inicio (bytes 168..184).
     """
     if len(content) < 256:
         return content
     b = bytearray(content)
-
-    # Obtener el tamaño total del encabezado (bytes 184..192)
-    try:
-        header_size_str = bytes(b[184:192]).decode("ascii", errors="ignore").strip()
-        header_bytes = int(header_size_str)
-    except ValueError:
-        header_bytes = 256
-
-    header_limit = min(len(b), max(256, header_bytes))
-
-    # Reemplazar bytes no-ASCII o de control no imprimibles en todos los bloques de encabezado
-    for i in range(header_limit):
+    # Patient ID (bytes 8..88) y Recording ID (bytes 88..168): reemplazar bytes no-ASCII por espacios
+    for i in range(8, 168):
         if b[i] > 127 or b[i] < 32:
-            b[i] = ord(" ")
+            b[i] = ord(' ')
 
     # Startdate (bytes 168..176) y Starttime (bytes 176..184)
     for i in range(168, 184):
-        if b[i] in (ord(":"), ord("/"), ord("-"), ord(" ")):
-            b[i] = ord(".")
+        if b[i] in (ord(':'), ord('/'), ord('-'), ord(' ')):
+            b[i] = ord('.')
         elif b[i] > 127:
-            b[i] = ord("0")
+            b[i] = ord('0')
 
     return bytes(b)
 
