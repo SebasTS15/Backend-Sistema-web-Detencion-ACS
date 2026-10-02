@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -33,7 +34,7 @@ class ModelService:
         model.eval()
         return model
 
-    def predict(self, signals: list[list[float]], normalize: bool = True) -> dict[str, Any]:
+    def predict(self, signals: np.ndarray | list[list[float]], normalize: bool = True) -> dict[str, Any]:
         tensor, preprocessing = prepare_signal(signals, normalize=normalize)
         tensor = tensor.to(self.device)
 

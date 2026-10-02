@@ -10,7 +10,7 @@ EXPECTED_CHANNEL_NAMES = ["FLOW_IDX", "THO_IDX", "ABD_IDX"]
 
 
 def prepare_signal(
-    signals: list[list[float]],
+    signals: np.ndarray | list[list[float]],
     normalize: bool = True,
     channel_names: list[str] | None = None,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
@@ -18,7 +18,7 @@ def prepare_signal(
     Prepara señales para el modelo, validando que sean compatibles con los canales de entrenamiento.
     
     Args:
-        signals: Matriz 2D [muestras, canales] con los datos de las señales
+        signals: Matriz 2D [muestras, canales] (numpy array o lista de listas) con los datos de las señales
         normalize: Si normalizar por canal (z-score)
         channel_names: Nombres de los canales para validar (opcional)
         

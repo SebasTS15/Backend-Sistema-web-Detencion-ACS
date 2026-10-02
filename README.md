@@ -74,10 +74,12 @@ Crea un **Web Service** desde este repositorio y selecciona el entorno **Docker*
 APP_ENV=production
 MODEL_PATH=./modelo_resnet_apnea_central_0-7.pth
 MODEL_THRESHOLD=0.5
-DB_HOST=db.TU_PROJECT_REF.supabase.co
+# Copialo desde Supabase > Connect > Session pooler.
+# Render no tiene conectividad IPv6 hacia la conexion directa db.<ref>.supabase.co.
+DB_HOST=aws-0.TU_REGION.pooler.supabase.com
 DB_PORT=5432
 DB_NAME=postgres
-DB_USER=postgres
+DB_USER=postgres.TU_PROJECT_REF
 DB_PASSWORD=<clave de Supabase, marcada como Secret>
 DB_SSLMODE=require
 CORS_ORIGINS=https://tu-frontend.onrender.com
@@ -89,3 +91,5 @@ AUTH_PASSWORD=<clave robusta, marcada como Secret>
 ```
 
 Usa `/` como Health Check Path en Render. El modelo `.pth` forma parte de la imagen Docker; no lo elimines del repositorio.
+
+> En Supabase abre **Connect** y selecciona **Session pooler**. Copia desde alli el host, el puerto `5432` y el usuario. No intentes deducir el host a partir de la region: puede variar. La conexion directa `db.<PROJECT_REF>.supabase.co:5432` resuelve por IPv6 y Render no puede acceder a ella.
