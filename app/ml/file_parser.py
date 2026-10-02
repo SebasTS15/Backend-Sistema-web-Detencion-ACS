@@ -39,34 +39,53 @@ def parse_signal_file(file: UploadFile) -> tuple[np.ndarray, dict[str, Any]]:
 
 def _sanitize_edf_header(content: bytes) -> bytes:
     """
-    Sanitiza los encabezados principal y de canales EDF (bytes 0..header_bytes) corrigiendo:
-    - Bytes no-ASCII (<32 o >127) en Patient ID, Recording ID, etiquetas, transductores y prefiltros.
-    - Separadores no conformes (':', '/', '-', espacio) en fecha y hora de inicio (bytes 168..184).
+    Sanitiza el encabezado EDF principal y de canales corrigiendo:
+    - Caracteres no-ASCII (<32 o >127) en Patient ID, Recording ID, etiquetas, transductores y prefiltros.
+    - Separadores no conformes (':', '/', '-') en fecha y hora de inicio (bytes 168..184).
+    - Normalización de límites físicos y digitales si los campos presentan inconsistencias.
     """
     if len(content) < 256:
         return content
     b = bytearray(content)
 
-    # Obtener el tamaño total del encabezado (bytes 184..192)
-    try:
-        header_size_str = bytes(b[184:192]).decode("ascii", errors="ignore").strip()
-        header_bytes = int(header_size_str)
-    except ValueError:
-        header_bytes = 256
-
-    header_limit = min(len(b), max(256, header_bytes))
-
-    # Reemplazar bytes no-ASCII o de control no imprimibles en todos los bloques de encabezado
-    for i in range(header_limit):
-        if b[i] > 127 or b[i] < 32:
+    # Reemplazar caracteres no-ASCII en Patient ID (bytes 8..88) y Recording ID (bytes 88..168)
+    for i in range(8, 168):
+        if b[i] > 127:
             b[i] = ord(" ")
 
-    # Startdate (bytes 168..176) y Starttime (bytes 176..184)
+    # Startdate (bytes 168..176) y Starttime (bytes 176..184): corregir separadores no conformes
     for i in range(168, 184):
-        if b[i] in (ord(":"), ord("/"), ord("-"), ord(" ")):
+        if b[i] in (ord(":"), ord("/"), ord("-")):
             b[i] = ord(".")
-        elif b[i] > 127:
-            b[i] = ord("0")
+
+    # Normalizar campos de min/max físico y digital de los canales para evitar errores de pyedflib
+    try:
+        n_channels = int(bytes(b[252:256]).decode("ascii", errors="ignore").strip())
+        offset_pmin = 256 + n_channels * 16 + n_channels * 80 + n_channels * 8
+        offset_pmax = offset_pmin + n_channels * 8
+        offset_dmin = offset_pmax + n_channels * 8
+        offset_dmax = offset_dmin + n_channels * 8
+
+        for i in range(n_channels):
+            try:
+                pmin_val = float(bytes(b[offset_pmin + i * 8 : offset_pmin + (i + 1) * 8]).decode("ascii", errors="ignore").strip())
+                pmax_val = float(bytes(b[offset_pmax + i * 8 : offset_pmax + (i + 1) * 8]).decode("ascii", errors="ignore").strip())
+                dmin_val = int(bytes(b[offset_dmin + i * 8 : offset_dmin + (i + 1) * 8]).decode("ascii", errors="ignore").strip())
+                dmax_val = int(bytes(b[offset_dmax + i * 8 : offset_dmax + (i + 1) * 8]).decode("ascii", errors="ignore").strip())
+                if pmin_val >= pmax_val:
+                    pmin_val, pmax_val = -800.0, 800.0
+                if dmin_val >= dmax_val:
+                    dmin_val, dmax_val = -2000, 2000
+            except Exception:
+                pmin_val, pmax_val = -800.0, 800.0
+                dmin_val, dmax_val = -2000, 2000
+
+            b[offset_pmin + i * 8 : offset_pmin + (i + 1) * 8] = str(pmin_val).ljust(8)[:8].encode("ascii")
+            b[offset_pmax + i * 8 : offset_pmax + (i + 1) * 8] = str(pmax_val).ljust(8)[:8].encode("ascii")
+            b[offset_dmin + i * 8 : offset_dmin + (i + 1) * 8] = str(dmin_val).ljust(8)[:8].encode("ascii")
+            b[offset_dmax + i * 8 : offset_dmax + (i + 1) * 8] = str(dmax_val).ljust(8)[:8].encode("ascii")
+    except Exception:
+        pass
 
     return bytes(b)
 
@@ -83,16 +102,25 @@ def _read_edf(file: UploadFile) -> np.ndarray:
     try:
         with EdfReader(temp_path) as edf:
             n_channels = edf.signals_in_file
-            raw_signals: list[tuple[str, np.ndarray]] = []
+            headers: list[tuple[int, str]] = []
 
             for idx in range(n_channels):
                 try:
-                    header = edf.getSignalHeader(idx)
-                    label = header.get("label", "").strip()
-                    # Ignorar canales de anotaciones EDF+
-                    if "annotation" in label.lower():
-                        continue
+                    lbl = edf.getSignalHeader(idx).get("label", "").strip()
+                    if "annotation" not in lbl.lower():
+                        headers.append((idx, lbl))
+                except Exception:
+                    continue
 
+            if not headers:
+                raise ValueError("El archivo EDF no contiene señales numéricas válidas.")
+
+            # Seleccionar previamente los canales necesarios antes de cargar la señal a RAM
+            selected_channels = _select_target_channel_indices(headers)
+
+            raw_signals: list[tuple[str, np.ndarray]] = []
+            for idx, label in selected_channels:
+                try:
                     sig = edf.readSignal(idx).astype(np.float32)
                     if sig.size > 0:
                         raw_signals.append((label, sig))
@@ -100,7 +128,7 @@ def _read_edf(file: UploadFile) -> np.ndarray:
                     continue
 
             if not raw_signals:
-                raise ValueError("El archivo EDF no contiene señales numéricas válidas.")
+                raise ValueError("No se pudieron leer las señales del archivo EDF.")
 
             return _align_and_select_channels(raw_signals)
     except ValueError:
@@ -114,28 +142,39 @@ def _read_edf(file: UploadFile) -> np.ndarray:
             pass
 
 
+def _select_target_channel_indices(headers: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """
+    Identifica hasta EXPECTED_CHANNELS (3) canales relevantes (Flujo, Tórax, Abdomen) antes de leer datos.
+    """
+    flow, tho, abd = None, None, None
+
+    for idx, label in headers:
+        lbl = label.lower()
+        if flow is None and any(k in lbl for k in ["flow", "flw", "nasal", "air", "naf", "resp_flow"]):
+            flow = (idx, label)
+        elif tho is None and any(k in lbl for k in ["tho", "thor", "chest", "rib", "vth", "thoracic"]):
+            tho = (idx, label)
+        elif abd is None and any(k in lbl for k in ["abd", "abdo", "abdomen", "vab", "abdominal"]):
+            abd = (idx, label)
+
+    selected = [ch for ch in [flow, tho, abd] if ch is not None]
+
+    if len(selected) < EXPECTED_CHANNELS:
+        used_indices = {idx for idx, _ in selected}
+        for ch in headers:
+            if ch[0] not in used_indices:
+                selected.append(ch)
+                if len(selected) == EXPECTED_CHANNELS:
+                    break
+
+    return selected
+
+
 def _align_and_select_channels(raw_signals: list[tuple[str, np.ndarray]]) -> np.ndarray:
     """
-    Selecciona los canales más relevantes y los alinea si tienen diferentes frecuencias de muestreo.
+    Alinea los canales seleccionados si tienen diferentes frecuencias de muestreo.
     """
-    flow_sig, tho_sig, abd_sig = None, None, None
-
-    for label, sig in raw_signals:
-        lbl = label.lower()
-        if flow_sig is None and any(k in lbl for k in ["flow", "flw", "nasal", "air", "resp_flow"]):
-            flow_sig = sig
-        elif tho_sig is None and any(k in lbl for k in ["tho", "thor", "chest", "rib", "thoracic"]):
-            tho_sig = sig
-        elif abd_sig is None and any(k in lbl for k in ["abd", "abdo", "abdomen", "abdominal"]):
-            abd_sig = sig
-
-    matched = [s for s in [flow_sig, tho_sig, abd_sig] if s is not None]
-
-    if len(matched) < EXPECTED_CHANNELS:
-        selected_sigs = [sig for _, sig in raw_signals]
-    else:
-        selected_sigs = matched
-
+    selected_sigs = [sig for _, sig in raw_signals]
     max_len = max(len(s) for s in selected_sigs)
     aligned_signals: list[np.ndarray] = []
 
