@@ -43,7 +43,7 @@ class ModelService:
         logger.info(f"Modelo PyTorch '{self.model_path.name}' cargado exitosamente y listo para inferencia en {self.device}.")
         return model
 
-    def predict(self, signals: list[list[float]], normalize: bool = True) -> dict[str, Any]:
+    def predict(self, signals: np.ndarray | list[list[float]], normalize: bool = True) -> dict[str, Any]:
         logger.info(f"Ejecutando inferencia en ModelService (normalize={normalize})...")
         tensor, preprocessing = prepare_signal(signals, normalize=normalize)
         tensor = tensor.to(self.device)
