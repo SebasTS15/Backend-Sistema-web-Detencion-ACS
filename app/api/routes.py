@@ -18,7 +18,13 @@ from app.db.repositories import (
 from app.db.session import get_db
 from app.ml.file_parser import parse_signal_file
 from app.ml.service import get_model_service
-from app.schemas import ErrorResponse, HealthResponse, PredictResponse
+from app.schemas import (
+    ErrorResponse,
+    HealthResponse,
+    HistorialResponse,
+    PredictResponse,
+    ResultadoResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,14 +73,21 @@ def predict(
     db: Session = Depends(get_db),
     current_user: dict[str, str] = Depends(get_current_user),
 ) -> PredictResponse:
+    target_user_id = usuario_id
+    if target_user_id is None and current_user and current_user.get("user_id"):
+        try:
+            target_user_id = int(current_user["user_id"])
+        except (ValueError, TypeError):
+            target_user_id = None
+
     logger.info(
         f"Petición de predicción recibida por user_id={current_user.get('user_id')}: "
-        f"archivo='{archivo.filename}', usuario_id={usuario_id}, paciente_id='{paciente_id}', "
+        f"archivo='{archivo.filename}', usuario_id={usuario_id} (target_user_id={target_user_id}), paciente_id='{paciente_id}', "
         f"normalize={normalize}, guardar_resultado={guardar_resultado}, guardar_historial={guardar_historial}"
     )
 
-    if usuario_id is not None and get_usuario(db, usuario_id) is None:
-        logger.warning(f"Rechazando predicción: usuario_id={usuario_id} no existe en la base de datos.")
+    if target_user_id is not None and get_usuario(db, target_user_id) is None:
+        logger.warning(f"Rechazando predicción: usuario_id={target_user_id} no existe en la base de datos.")
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
     try:
@@ -108,7 +121,7 @@ def predict(
             logger.info("Guardando registro de resultado en BD...")
             response_data["resultado_id"] = insert_resultado(
                 db,
-                usuario_id=usuario_id,
+                usuario_id=target_user_id,
                 paciente_id=paciente_id,
                 prediccion=prediction["prediccion"],
                 probabilidad=prediction["probabilidad"],
@@ -121,10 +134,10 @@ def predict(
             logger.info("Guardando registro de consulta en el historial de BD...")
             response_data["historial_id"] = insert_historial_consulta(
                 db,
-                usuario_id=usuario_id,
+                usuario_id=target_user_id,
                 endpoint="/api/v1/predict",
                 request={
-                    "usuario_id": usuario_id,
+                    "usuario_id": target_user_id,
                     "paciente_id": paciente_id,
                     "metadata": metadata_dict,
                     "normalize": normalize,
@@ -165,6 +178,7 @@ def usuario(
 
 @router.get(
     "/usuarios/{usuario_id}/resultados",
+    response_model=list[ResultadoResponse],
     responses={401: {"model": ErrorResponse}},
 )
 def resultados_usuario(
@@ -179,6 +193,7 @@ def resultados_usuario(
 
 @router.get(
     "/usuarios/{usuario_id}/historial",
+    response_model=list[HistorialResponse],
     responses={401: {"model": ErrorResponse}},
 )
 def historial_usuario(
@@ -189,4 +204,5 @@ def historial_usuario(
 ) -> list[dict[str, Any]]:
     logger.info(f"Usuario user_id={current_user.get('user_id')} consulta historial de usuario ID={usuario_id} (limit={limit})")
     return list_historial_by_usuario(db, usuario_id, limit=limit)
+
 

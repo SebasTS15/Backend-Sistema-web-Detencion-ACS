@@ -24,6 +24,8 @@ class AuthRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user_id: int
+    username: str
 
 
 @router.post("/token", response_model=TokenResponse)
@@ -61,4 +63,9 @@ def login_for_access_token(
         expires_delta=access_token_expires,
     )
     logger.info(f"Token JWT generado exitosamente para usuario: '{credentials.username}'")
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(
+        access_token=access_token,
+        user_id=int(usuario["id"]),
+        username=usuario["username"],
+    )
+

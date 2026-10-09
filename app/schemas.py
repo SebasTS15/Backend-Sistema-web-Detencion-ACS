@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -24,6 +25,27 @@ class PredictResponse(BaseModel):
     historial_id: int | None = None
 
 
+class ResultadoResponse(BaseModel):
+    id: int
+    usuario_id: int | None = None
+    paciente_id: str | None = None
+    prediccion: bool
+    probabilidad: float
+    clase: str
+    modelo: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class HistorialResponse(BaseModel):
+    id: int
+    usuario_id: int | None = None
+    endpoint: str
+    request: dict[str, Any] = Field(default_factory=dict)
+    response: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
 class HealthResponse(BaseModel):
     status: str
     database: str
@@ -44,3 +66,4 @@ class ValidationErrorResponse(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     code: str | None = None
+
